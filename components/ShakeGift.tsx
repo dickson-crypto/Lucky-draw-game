@@ -1,203 +1,204 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Gift } from '../types';
-import { motion, useAnimation } from 'framer-motion';
-import { Gift as GiftIcon, Smartphone, Zap } from 'lucide-react';
-import { pickRandomGift } from '../services/sheetService';
+import React, { useState } from 'react';
+import { Question } from '../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Star, XCircle, CheckCircle2, Gift as GiftIcon } from 'lucide-react';
 
-interface ShakeGiftProps {
-  gifts: Gift[];
-  onGiftRevealed: (gift: Gift) => void;
+interface QuizGameProps {
+  questions: Question[];
+  onWin: () => void;
+  onLog: (action: string, details: string) => void;
 }
 
-export const ShakeGift: React.FC<ShakeGiftProps> = ({ gifts, onGiftRevealed }) => {
-  const [shakeIntensity, setShakeIntensity] = useState(0);
-  const [permissionGranted, setPermissionGranted] = useState(false);
-  const [isRevealing, setIsRevealing] = useState(false);
-  const boxControls = useAnimation();
-  const progressRef = useRef(0);
-  const [needsPermissionBtn, setNeedsPermissionBtn] = useState(false);
+export const QuizGame: React.FC<QuizGameProps> = ({ questions, onWin, onLog }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<'CORRECT' | 'WRONG' | null>(null);
+  
+  const currentQuestion = questions[currentIndex % questions.length];
 
-  useEffect(() => {
-    if (
-      typeof DeviceMotionEvent !== 'undefined' &&
-      typeof (DeviceMotionEvent as any).requestPermission === 'function'
-    ) {
-      setNeedsPermissionBtn(true);
-    } else {
-      setPermissionGranted(true);
-    }
-  }, []);
+  const handleOptionClick = (option: string) => {
+    if (selectedOption || feedback) return; 
+    setSelectedOption(option);
 
-  const requestAccess = async () => {
-    try {
-      const response = await (DeviceMotionEvent as any).requestPermission();
-      if (response === 'granted') {
-        setPermissionGranted(true);
-        setNeedsPermissionBtn(false);
-      } else {
-        alert('我們需要感應器權限來偵測搖晃動作！');
+    const isCorrect = option === currentQuestion.correctAnswer;
+
+    if (isCorrect) {
+      setFeedback('CORRECT');
+      
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(50); 
       }
-    } catch (e) {
-      console.error(e);
-      setPermissionGranted(true);
-    }
-  };
 
-  useEffect(() => {
-    if (!permissionGranted || isRevealing) return;
-
-    let lastX = 0, lastY = 0, lastZ = 0, lastUpdate = 0;
-
-    const handleMotion = (event: DeviceMotionEvent) => {
-      const current = event.accelerationIncludingGravity;
-      if (!current) return;
-      const { x, y, z } = current;
-      const now = Date.now();
-
-      if (now - lastUpdate > 100) {
-        const diffTime = now - lastUpdate;
-        lastUpdate = now;
-        const speed = Math.abs((x || 0) + (y || 0) + (z || 0) - lastX - lastY - lastZ) / diffTime * 10000;
-
-        if (speed > 300) {
-          boxControls.start({
-            rotate: [0, -15, 15, -15, 15, 0],
-            scale: [1, 1.2, 1],
-            transition: { duration: 0.15 }
-          });
-          
-          const increment = Math.min(speed / 80, 8); 
-          progressRef.current += increment;
-          setShakeIntensity(Math.min(progressRef.current, 100));
-
-          if (progressRef.current >= 100) handleComplete();
+      onLog('ANSWER_CORRECT', `QID:${currentQuestion.id}`);
+      setTimeout(() => {
+        const newStreak = streak + 1;
+        if (newStreak >= 5) {
+          onWin();
+        } else {
+          setStreak(newStreak);
+          setCurrentIndex((prev) => prev + 1);
+          setFeedback(null);
+          setSelectedOption(null);
         }
-        lastX = x || 0; lastY = y || 0; lastZ = z || 0;
-      }
-    };
-
-    window.addEventListener('devicemotion', handleMotion);
-    return () => window.removeEventListener('devicemotion', handleMotion);
-  }, [permissionGranted, isRevealing, boxControls]);
-
-  const handleManualShake = () => {
-    if (isRevealing) return;
-    boxControls.start({
-        rotate: [0, -20, 20, -20, 20, 0],
-        scale: [1, 1.1, 1],
-        transition: { duration: 0.3 }
-    });
-    progressRef.current += 20;
-    setShakeIntensity(Math.min(progressRef.current, 100));
-    if (progressRef.current >= 100) handleComplete();
-  };
-
-  const handleComplete = () => {
-    setIsRevealing(true);
-    
-    boxControls.start({
-        scale: [1.2, 1.6, 0.5, 20], 
-        rotate: [0, -20, 20, 360, 720],
-        opacity: [1, 1, 1, 1, 0],
-        transition: { duration: 1.2, ease: "easeInOut" }
-    });
-
-    const wonGift = pickRandomGift(gifts);
-    if (wonGift) {
-      setTimeout(() => onGiftRevealed(wonGift), 1000);
+      }, 1200);
     } else {
-      alert("所有禮物已換罄！");
+      setFeedback('WRONG');
+      
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(200); 
+      }
+
+      onLog('ANSWER_WRONG', `QID:${currentQuestion.id} | Answered:${option} | Correct:${currentQuestion.correctAnswer}`);
     }
   };
 
-  if (needsPermissionBtn && !permissionGranted) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-black/40 backdrop-blur-md">
-        <div className="bg-white/10 p-6 rounded-full mb-6 ring-4 ring-blue-500/30">
-             <Smartphone className="w-12 h-12 text-blue-400 animate-pulse" />
-        </div>
-        <h2 className="text-3xl font-extrabold text-white mb-4 tracking-tight">點擊啟用</h2>
-        <p className="text-blue-200 mb-8 text-lg">我們需要感應器權限來進行搖晃遊戲！</p>
-        <button onClick={requestAccess} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-10 rounded-2xl shadow-lg shadow-blue-500/40 transform transition active:scale-95">
-          允許使用感應器
-        </button>
-      </div>
-    );
-  }
+  const handleRetry = () => {
+    setStreak(0);
+    setFeedback(null);
+    setSelectedOption(null);
+    setCurrentIndex((prev) => prev + Math.floor(Math.random() * 5) + 1); 
+  };
+
+  const remaining = 5 - streak;
 
   return (
-    <div className="flex flex-col items-center justify-between h-full py-12 px-6 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-start min-h-[70vh] w-full max-w-md mx-auto p-6 relative">
       
-      <div className="absolute inset-0 pointer-events-none">
-         {Array.from({length: 20}).map((_, i) => (
-             <motion.div
-                key={i}
-                className="absolute bg-white/20 rounded-full"
-                style={{
-                    width: Math.random() * 6 + 2,
-                    height: Math.random() * 6 + 2,
-                    top: Math.random() * 100 + '%',
-                    left: Math.random() * 100 + '%',
-                }}
-                animate={{
-                    y: [0, -100],
-                    opacity: [0, 1, 0]
-                }}
-                transition={{
-                    duration: Math.random() * 5 + 5,
-                    repeat: Infinity,
-                    delay: Math.random() * 5
-                }}
-             />
-         ))}
+      <motion.div 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="w-full mb-6 bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex items-center justify-between relative overflow-hidden"
+      >
+         <div 
+            className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-blue-500 to-fuchsia-500 transition-all duration-500 ease-out"
+            style={{ width: `${(streak / 5) * 100}%` }}
+         ></div>
+
+         <div className="flex items-center gap-3 z-10">
+            <div className={`p-2 rounded-xl transition-colors duration-300 ${streak >= 4 ? 'bg-yellow-500/20 ring-2 ring-yellow-500/50' : 'bg-white/10'}`}>
+                <GiftIcon className={`w-6 h-6 transition-all duration-300 ${streak >= 4 ? 'text-yellow-400 animate-bounce' : 'text-blue-200'}`} />
+            </div>
+            <div className="flex flex-col">
+                <span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest">目標獎勵</span>
+                <span className="text-sm font-bold text-white">神秘禮盒</span>
+            </div>
+         </div>
+
+         <div className="flex flex-col items-end z-10">
+             <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">距離解鎖</span>
+             <span className="text-sm font-mono text-white">
+                還差 <span className="text-yellow-400 font-bold text-lg">{remaining}</span> 題
+             </span>
+         </div>
+      </motion.div>
+
+      <div className="flex justify-center space-x-2 mb-8">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <motion.div
+            key={i}
+            initial={false}
+            animate={{ 
+              scale: i <= streak ? 1.2 : 1,
+              color: i <= streak ? '#FACC15' : '#4B5563', 
+              fill: i <= streak ? '#FACC15' : 'transparent' 
+            }}
+            className="text-gray-600 relative"
+          >
+            <Star 
+              className={`w-8 h-8 ${i <= streak ? 'drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]' : ''}`} 
+              fill={i <= streak ? "currentColor" : "none"}
+              strokeWidth={i <= streak ? 0 : 2}
+            />
+          </motion.div>
+        ))}
       </div>
 
-      <div className="text-center z-10 mt-4">
-        <h2 className="text-4xl font-extrabold text-white mb-2 drop-shadow-lg">搖起來！</h2>
-        <p className="text-blue-200 font-medium tracking-wide uppercase text-sm">用力搖晃手機以解鎖獎品</p>
+      <div className="text-center mb-2">
+        <span className="text-blue-300 font-semibold tracking-wider text-sm uppercase">第 {streak + 1} / 5 題</span>
       </div>
 
-      <div className="relative w-full max-w-xs aspect-square flex items-center justify-center cursor-pointer z-10" onClick={handleManualShake}>
-         <div className={`absolute inset-0 bg-gradient-to-tr from-yellow-500 to-pink-600 rounded-full filter blur-[60px] opacity-30 transition-opacity duration-300 ${shakeIntensity > 20 ? 'opacity-60' : ''}`}></div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentQuestion.id}
+          initial={{ opacity: 0, y: 50, rotateX: -15 }}
+          animate={{ opacity: 1, y: 0, rotateX: 0 }}
+          exit={{ opacity: 0, y: -50, rotateX: 15 }}
+          transition={{ duration: 0.4, type: 'spring' }}
+          className="glass-panel text-white rounded-3xl shadow-2xl p-6 w-full border-t border-white/20"
+        >
+          <h2 className="text-2xl font-bold mb-8 text-center leading-tight drop-shadow-md">
+            {currentQuestion.questionText}
+          </h2>
 
-         <motion.div
-            animate={boxControls}
-            className="relative"
-         >
-             <div className="relative">
-                 <GiftIcon 
-                    className={`w-64 h-64 drop-shadow-2xl transition-colors duration-300 ${shakeIntensity > 70 ? 'text-yellow-300' : 'text-purple-300'}`} 
-                    strokeWidth={1}
-                 />
-                 {shakeIntensity > 30 && (
-                     <motion.div className="absolute -top-4 -right-4">
-                         <Zap className="w-12 h-12 text-yellow-400 fill-yellow-400" />
-                     </motion.div>
-                 )}
-             </div>
-         </motion.div>
-      </div>
+          <div className="space-y-4">
+            {currentQuestion.options.map((opt, idx) => {
+               const isSelected = selectedOption === opt;
+               const isCorrect = feedback === 'CORRECT';
+               const isWrong = feedback === 'WRONG';
+               
+               let btnClass = "bg-white/5 border-white/10 hover:bg-white/10"; 
+               if (isSelected) {
+                 if (isCorrect) btnClass = "bg-green-500/20 border-green-400 text-green-300 shadow-[0_0_15px_rgba(74,222,128,0.3)]";
+                 else if (isWrong) btnClass = "bg-red-500/20 border-red-400 text-red-300 shadow-[0_0_15px_rgba(248,113,113,0.3)]";
+                 else btnClass = "bg-blue-500/20 border-blue-400 text-blue-300";
+               }
 
-      <div className="w-full max-w-xs z-10 mb-8">
-        <div className="flex justify-between items-end mb-2">
-            <span className="text-white font-bold text-lg uppercase italic">搖晃力度</span>
-            <span className="text-yellow-400 font-mono text-xl">{Math.round(shakeIntensity)}%</span>
-        </div>
-        
-        <div className="flex gap-1 h-8">
-            {Array.from({length: 10}).map((_, i) => (
-                <div key={i} className="flex-1 bg-gray-800 rounded-sm overflow-hidden relative">
-                    <motion.div 
-                        className="w-full h-full bg-gradient-to-t from-yellow-500 to-red-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"
-                        initial={{ height: '0%' }}
-                        animate={{ height: shakeIntensity >= (i + 1) * 10 ? '100%' : '0%' }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    />
-                </div>
-            ))}
-        </div>
-        <p className="text-center text-xs text-white/30 mt-4">(電腦版：點擊盒子測試)</p>
-      </div>
+               return (
+                <motion.button
+                  key={idx}
+                  whileTap={{ scale: 0.98 }}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  onClick={() => handleOptionClick(opt)}
+                  disabled={!!selectedOption}
+                  className={`w-full p-4 rounded-2xl text-left font-semibold text-lg transition-all duration-300 border backdrop-blur-sm flex items-center justify-between group ${btnClass}`}
+                >
+                  <span>{opt}</span>
+                  {isSelected && isCorrect && <CheckCircle2 className="w-6 h-6 text-green-400" />}
+                  {isSelected && isWrong && <XCircle className="w-6 h-6 text-red-400" />}
+                </motion.button>
+               );
+            })}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {feedback === 'WRONG' && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-6 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-gray-900 border border-red-500/30 rounded-3xl p-8 max-w-sm w-full text-center shadow-[0_0_50px_rgba(239,68,68,0.3)]"
+            >
+              <div className="mx-auto bg-red-500/20 w-20 h-20 rounded-full flex items-center justify-center mb-6 ring-4 ring-red-500/10">
+                <XCircle className="w-10 h-10 text-red-500" />
+              </div>
+              <h3 className="text-3xl font-extrabold text-white mb-2">答錯了！</h3>
+              <p className="text-gray-400 mb-6">連勝中斷，重新開始！</p>
+              
+              <div className="bg-gray-800/50 rounded-xl p-4 mb-8 border border-gray-700">
+                <p className="text-xs text-gray-500 uppercase tracking-wide font-bold mb-2">正確答案是</p>
+                <p className="text-xl font-bold text-green-400">{currentQuestion.correctAnswer}</p>
+              </div>
+
+              <button 
+                onClick={handleRetry}
+                className="w-full bg-gradient-to-r from-red-600 to-pink-600 text-white font-bold py-4 rounded-xl hover:brightness-110 transition-all shadow-lg active:scale-95"
+              >
+                再試一次
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
