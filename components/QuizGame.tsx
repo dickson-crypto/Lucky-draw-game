@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Question } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, XCircle, CheckCircle2, Gift } from 'lucide-react';
+import { Star, XCircle, CheckCircle2, Gift as GiftIcon } from 'lucide-react';
 
 interface QuizGameProps {
   questions: Question[];
@@ -77,7 +77,7 @@ export const QuizGame: React.FC<QuizGameProps> = ({ questions, onWin, onLog }) =
 
          <div className="flex items-center gap-3 z-10">
             <div className={`p-2 rounded-xl transition-colors duration-300 ${streak >= 4 ? 'bg-yellow-500/20 ring-2 ring-yellow-500/50' : 'bg-white/10'}`}>
-                <Gift className={`w-6 h-6 transition-all duration-300 ${streak >= 4 ? 'text-yellow-400 animate-bounce' : 'text-blue-200'}`} />
+                <GiftIcon className={`w-6 h-6 transition-all duration-300 ${streak >= 4 ? 'text-yellow-400 animate-bounce' : 'text-blue-200'}`} />
             </div>
             <div className="flex flex-col">
                 <span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest">目標獎勵</span>
