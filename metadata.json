@@ -1,0 +1,8 @@
+{
+  "name": "幸運搖一搖問答",
+  "description": "一個掃描 QR code 的問答遊戲，用戶連續答對 5 題即可搖動手機贏取獎品。",
+  "requestFramePermissions": [
+    "accelerometer",
+    "gyroscope"
+  ]
+}
